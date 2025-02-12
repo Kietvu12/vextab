@@ -14,17 +14,18 @@ class Artist
 
   @NOLOGO = false
 
-  constructor: (@x, @y, @width, options) ->
-    @options =
-      font_face: "Arial"
-      font_size: 10
-      font_style: null
-      bottom_spacing: 20 + (if Artist.NOLOGO then 0 else 10)
-      tab_stave_lower_spacing: 10
-      note_stave_lower_spacing: 0
-      scale: 1.0
-    _.extend(@options, options) if options?
-    @reset()
+constructor: (@x, @y, @width, options) ->
+  @options =
+    font_face: "Arial"
+    font_size: 10
+    font_style: null
+    bottom_spacing: 20 + (if Artist.NOLOGO then 0 else 10)
+    tab_stave_lower_spacing: 10
+    note_stave_lower_spacing: 0
+    scale: 1.0
+    bar_width: 50  # Thêm tùy chọn chiều rộng bar mặc định là 50px
+  _.extend(@options, options) if options?
+  @reset()
 
   reset: ->
     @tuning = new Vex.Flow.Tuning()
@@ -44,7 +45,7 @@ class Artist
       "player": "false"
       "tempo": 120
       "instrument": "acoustic_grand_piano"
-      "accidentals": "standard"  # standard / cautionary
+      "accidentals": "standard" 
       "tab-stems": "false"
       "tab-stem-direction": "up"
       "beam-rests": "true"
@@ -944,71 +945,75 @@ class Artist
       stave.note_voices.push(stave.note_notes)
       stave.note_notes = []
 
-  addStave: (element, options) ->
-    opts =
-      tuning: "standard"
-      clef: "treble"
-      key: "C"
-      notation: if element == "tabstave" then "false" else "true"
-      tablature: if element == "stave" then "false" else "true"
-      strings: 6
+addStave: (element, options) ->
+  opts =
+    tuning: "standard"
+    clef: "treble"
+    key: "C"
+    notation: if element == "tabstave" then "false" else "true"
+    tablature: if element == "stave" then "false" else "true"
+    strings: 6
+    bar_width: @options.bar_width  # Sử dụng chiều rộng bar từ options
 
-    _.extend(opts, options)
-    L "addStave: ", element, opts
+  _.extend(opts, options)
+  L "addStave: ", element, opts
 
-    tab_stave = null
-    note_stave = null
+  tab_stave = null
+  note_stave = null
 
-    # This is used to line up tablature and notation.
-    start_x = @x + @customizations["connector-space"]
-    tabstave_start_x = 40
+  # This is used to line up tablature and notation.
+  start_x = @x + @customizations["connector-space"]
+  tabstave_start_x = 40
 
-    if opts.notation is "true"
-      note_stave = new Vex.Flow.Stave(start_x, @last_y, @customizations.width - 20,
-        {left_bar: false})
-      note_stave.addClef(opts.clef) if opts.clef isnt "none"
-      note_stave.addKeySignature(opts.key)
-      note_stave.addTimeSignature(opts.time) if opts.time?
+  if opts.notation is "true"
+    note_stave = new Vex.Flow.Stave(start_x, @last_y, opts.bar_width,  # Sử dụng bar_width
+      {left_bar: false})
+    note_stave.addClef(opts.clef) if opts.clef isnt "none"
+    note_stave.addKeySignature(opts.key)
+    note_stave.addTimeSignature(opts.time) if opts.time?
 
-      @last_y += note_stave.getHeight() +
-                 @options.note_stave_lower_spacing +
-                 parseInt(@customizations["stave-distance"], 10)
-      tabstave_start_x = note_stave.getNoteStartX()
-      @current_clef = if opts.clef is "none" then "treble" else opts.clef
+    @last_y += note_stave.getHeight() +
+               @options.note_stave_lower_spacing +
+               parseInt(@customizations["stave-distance"], 10)
+    tabstave_start_x = note_stave.getNoteStartX()
+    @current_clef = if opts.clef is "none" then "treble" else opts.clef
 
-    if opts.tablature is "true"
-      tab_stave = new Vex.Flow.TabStave(start_x, @last_y, @customizations.width - 20,
-        {left_bar: false}).setNumLines(opts.strings)
-      tab_stave.addTabGlyph() if opts.clef isnt "none"
-      tab_stave.setNoteStartX(tabstave_start_x)
-      @last_y += tab_stave.getHeight() + @options.tab_stave_lower_spacing
+  if opts.tablature is "true"
+    tab_stave = new Vex.Flow.TabStave(start_x, @last_y, opts.bar_width,  # Sử dụng bar_width
+      {left_bar: false}).setNumLines(opts.strings)
+    tab_stave.addTabGlyph() if opts.clef isnt "none"
+    tab_stave.setNoteStartX(tabstave_start_x)
+    @last_y += tab_stave.getHeight() + @options.tab_stave_lower_spacing
 
-    @closeBends()
-    beam_groups = Vex.Flow.Beam.getDefaultBeamGroups(opts.time)
-    @staves.push {
-      tab: tab_stave,
-      note: note_stave,
-      tab_voices: [],
-      note_voices: [],
-      tab_notes: [],
-      note_notes: [],
-      text_voices: [],
-      beam_groups: beam_groups
-    }
+  @closeBends()
+  beam_groups = Vex.Flow.Beam.getDefaultBeamGroups(opts.time)
+  @staves.push {
+    tab: tab_stave,
+    note: note_stave,
+    tab_voices: [],
+    note_voices: [],
+    tab_notes: [],
+    note_notes: [],
+    text_voices: [],
+    beam_groups: beam_groups
+  }
 
-    @tuning.setTuning(opts.tuning)
-    @key_manager.setKey(opts.key)
+  @tuning.setTuning(opts.tuning)
+  @key_manager.setKey(opts.key)
 
-    return
+  return
 
-  runCommand: (line, _l=0, _c=0) ->
-    L "runCommand: ", line
-    words = line.split(/\s+/)
-    switch words[0]
-      when "octave-shift"
-        @current_octave_shift = parseInt(words[1], 10)
-        L "Octave shift: ", @current_octave_shift
-      else
-        throw new Vex.RERR("ArtistError", "Invalid command '#{words[0]}' at line #{_l} column #{_c}")
+runCommand: (line, _l=0, _c=0) ->
+  L "runCommand: ", line
+  words = line.split(/\s+/)
+  switch words[0]
+    when "octave-shift"
+      @current_octave_shift = parseInt(words[1], 10)
+      L "Octave shift: ", @current_octave_shift
+    when "bar-width"  # Thêm lệnh để thay đổi chiều rộng bar
+      @options.bar_width = parseInt(words[1], 10)
+      L "Bar width set to: ", @options.bar_width
+    else
+      throw new Vex.RERR("ArtistError", "Invalid command '#{words[0]}' at line #{_l} column #{_c}")
 
 export default Artist
